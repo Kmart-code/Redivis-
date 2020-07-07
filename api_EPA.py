@@ -4,6 +4,7 @@ import os
 import requests
 import json
 import time
+from io import StringIO
 
 # When calling this script, provide the API Token as an environment variables
 # E.g.: REDIVIS_API_TOKEN=your_api_token pipenv run python upload_script.py
@@ -12,9 +13,9 @@ import time
 access_token = os.environ["REDIVIS_API_TOKEN"]
 
 # See https://apidocs.redivis.com/referencing-resources
-user_name = "kevin"
-dataset_name = "upload_example"
-table_name = "test"
+user_name = "redivis"
+dataset_name = "epa_test"
+table_name = "pm2_5"
 
 dataset_identifier = "{}.{}".format(user_name, dataset_name)
 table_identifier = "{}.{}:next.{}".format(user_name, dataset_name, table_name)
@@ -22,50 +23,12 @@ api_base_path = "https://redivis.com/api/v1"
 filename = "test.csv"
 file_path = os.path.join("./", filename)
 
-def pull_from_api():
-
-    url = "http://www.airnowapi.org/aq/observation/latLong/current/?format=text/csv&latitude=37.7555&longitude=-122.4423&distance=25&API_KEY=A6A59B4B-07D4-4843-A7A2-72D4CF1B1AA5"
-
-    payload = {}
-    headers= {}
-
-    response = requests.request("GET", url, headers=headers, data = payload)
-
-    dataset_name = response
-
-    return response.text.encode('utf8')
-
-def convert_to_csv():
-
-
-    with open('data.json') as json_file:
-        data = json.load(json_file)
-
-
-    data_file = open('data_file.csv', 'w')
-
-    csv_writer = csv.writer(data_file)
-
-
-    count = 0
-
-    for data_chunk in data:
-        if count == 0:
-
-
-            header = emp.keys()
-            csv_writer.writerow(header)
-            count += 1
-
-        csv_writer.writerow(emp.values())
-
-    data_file.close()
-
-    return csv_writer
 
 def main():
+    # TODO: get last_updated timestamp, fetch all data since
+    print("Fetching EPA data")
 
-    pull_from_api
+    epa_data = pull_from_epa_api(start_time="2020-07-06T00", end_time = "2020-07-07T00")
 
     print("Creating next version if needed...")
 
@@ -73,11 +36,11 @@ def main():
 
     print("Creating upload...")
 
-    upload = create_upload(convert_to_csv)
+    upload = create_upload()
 
     print("Uploading file...")
 
-    upload_file(file_path, upload['uri'])
+    upload_data(epa_data, upload['uri'])
 
     # Wait for upload to finish importing
     while True:
@@ -93,6 +56,38 @@ def main():
     print("Import completed. Releasing version...")
 
     release_dataset()
+
+def pull_from_epa_api(start_time, end_time):
+    # See https://docs.airnowapi.org/Data/query
+    # BBox is for California
+    url = "http://www.airnowapi.org/aq/data/?startDate={start_time}&endDate={end_time}&parameters=PM25&BBOX={bbox}&dataType=A&format=application/json&verbose=0&nowcastonly=0&includerawconcentrations=0&API_KEY={epa_api_key}".format(start_time = start_time, end_time = end_time, bbox="-125.087280,32.200885,-113.837280,42.250626", epa_api_key="A6A59B4B-07D4-4843-A7A2-72D4CF1B1AA5")
+    payload = {}
+    headers= {}
+
+    response = requests.request("GET", url, headers=headers, data = payload)
+
+    dataset_name = response
+    return convert_to_csv(response.json())
+
+
+def convert_to_csv(input_json):
+    # See https://www.idkrtm.com/converting-json-to-csv-and-back-again-using-python/
+    # and https://stackoverflow.com/questions/9157314/how-do-i-write-data-into-csv-format-as-string-not-file
+    si = StringIO()
+    keylist = []
+    for key in input_json[0]:
+        keylist.append(key)
+        f = csv.writer(si)
+
+    f.writerow(keylist)
+
+    for record in input_json:
+        currentrecord = []
+        for key in keylist:
+            currentrecord.append(record[key])
+        f.writerow(currentrecord)
+
+    return si.getvalue()
 
 def get_next_version():
     url = "{}/datasets/{}/versions".format( api_base_path, dataset_identifier )
@@ -120,7 +115,7 @@ def create_next_version_if_not_exists( ):
     return r
 
 
-def create_upload( filename ):
+def create_upload( ):
     url = "{}/tables/{}/uploads".format(api_base_path, table_identifier)
     data = {"name": filename, "mergeStrategy": "append", "type": "delimited"}
     headers = {"Authorization": "Bearer {}".format(access_token)}
@@ -134,14 +129,12 @@ def create_upload( filename ):
     return res_json
 
 
-def upload_file(path_to_file, upload_uri):
+def upload_data(epa_data, upload_uri):
     url = api_base_path + upload_uri
-    files = {"upload_file": open(path_to_file, "rb")}
     headers = { "Authorization": "Bearer {}".format(access_token) }
 
-    with open( path_to_file, 'rb' ) as f:
-        r = requests.put(url, data=f, headers=headers)
-        checkForAPIError(r)
+    r = requests.put(url, data=epa_data, headers=headers)
+    checkForAPIError(r)
 
     return r.json()
 
@@ -175,5 +168,3 @@ def checkForAPIError(r):
         sys.exit( "An API error occurred at {} {} with status {}:\n\t{} ".format( r.request.method, r.request.path_url, r.status_code, res_json['error']['message'] ) )
 
 main()
-
-
