@@ -3,17 +3,18 @@ import csv
 import os
 import requests
 import json
-import time
+from time import gmtime, strftime
 from io import StringIO
+from redivis import bigquery
 
 # When calling this script, provide the API Token as an environment variables
 # E.g.: REDIVIS_API_TOKEN=your_api_token pipenv run python upload_script.py
 
 # This script assumes you have an API access token with date.edit scope. See https://apidocs.redivis.com/authorization
-access_token = os.environ["REDIVIS_API_TOKEN"]
+access_token = os.environ["AAAAYq9097o3xhmyEpN5iNqtZGPJMA7a"]
 
 # See https://apidocs.redivis.com/referencing-resources
-user_name = "redivis"
+user_name = "kevin"
 dataset_name = "epa_test"
 table_name = "pm2_5"
 
@@ -25,10 +26,12 @@ file_path = os.path.join("./", filename)
 
 
 def main():
-    # TODO: get last_updated timestamp, fetch all data since
-    print("Fetching EPA data")
 
-    epa_data = pull_from_epa_api(start_time="2020-07-06T00", end_time = "2020-07-07T00")
+    end_time = strftime('%Y-%m-%dT%H:%M', gmtime())
+
+    epa_data = pull_from_epa_api(start_time=get_current_time(), end_time=end_time)
+
+    return
 
     print("Creating next version if needed...")
 
@@ -56,6 +59,23 @@ def main():
     print("Import completed. Releasing version...")
 
     release_dataset()
+
+def get_current_time():
+
+    client = bigquery.Client()
+
+    start_time = "SELECT * DATETIME_ADD(MAX(PARSE_DATETIME('%Y-%m-%dT%H:%M', UTC)), INTERVAL 1 hour) as next_dt" \
+                "FROM redivis.epa_test.pm2_5: 1"
+    query_job = client.query(start_time)
+    print("Fetching EPA data")
+
+    hour = int(query_job[9])
+    updated_hour = hour + 1
+    query_job[9] = updated_hour
+
+    return query_job
+
+
 
 def pull_from_epa_api(start_time, end_time):
     # See https://docs.airnowapi.org/Data/query
