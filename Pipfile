@@ -7,3 +7,4 @@ verify_ssl = true
 
 [packages]
 requests = "*"
+redivis-bigquery = {editable = true,git = "https://github.com/redivis/redipy.git",subdirectory = "bigquery"}
