@@ -3,6 +3,7 @@ import csv
 import os
 import requests
 import json
+import datetime
 from time import gmtime, strftime
 from io import StringIO
 from redivis import bigquery
@@ -11,10 +12,10 @@ from redivis import bigquery
 # E.g.: REDIVIS_API_TOKEN=your_api_token pipenv run python upload_script.py
 
 # This script assumes you have an API access token with date.edit scope. See https://apidocs.redivis.com/authorization
-access_token = os.environ["AAAAYq9097o3xhmyEpN5iNqtZGPJMA7a"]
+access_token = "AAAAYq9097o3xhmyEpN5iNqtZGPJMA7a"
 
 # See https://apidocs.redivis.com/referencing-resources
-user_name = "kevin"
+user_name = "kmart"
 dataset_name = "epa_test"
 table_name = "pm2_5"
 
@@ -24,12 +25,25 @@ api_base_path = "https://redivis.com/api/v1"
 filename = "test.csv"
 file_path = os.path.join("./", filename)
 
+#case where the script is run twice back to back and the second time there aren't any results to show
+#if array length is 0 exit // no new data
+# end date at most 2 days later that the start time
 
 def main():
 
-    end_time = strftime('%Y-%m-%dT%H:%M', gmtime())
+    #raw_end_time = strftime('%Y-%m-%dT%H:%M', gmtime())
 
-    epa_data = pull_from_epa_api(start_time=get_current_time(), end_time=end_time)
+    start_time = get_start_time()
+
+    temp = get_start_time()
+
+    starting_day = int(temp[9])
+
+    end_day = starting_day + 2
+
+    temp.replace(temp[9], str(end_day))
+
+    epa_data = pull_from_epa_api(start_time=start_time, end_time=temp)
 
     return
 
@@ -60,20 +74,22 @@ def main():
 
     release_dataset()
 
-def get_current_time():
+def get_start_time():
 
     client = bigquery.Client()
 
-    start_time = "SELECT * DATETIME_ADD(MAX(PARSE_DATETIME('%Y-%m-%dT%H:%M', UTC)), INTERVAL 1 hour) as next_dt" \
-                "FROM redivis.epa_test.pm2_5: 1"
+    start_time = """SELECT DATETIME_ADD(MAX(PARSE_DATETIME('%Y-%m-%dT%H:%M', UTC)), INTERVAL 1 hour) as next_dt 
+                    FROM redivis.epa_test.pm2_5:1"""
+
     query_job = client.query(start_time)
+
     print("Fetching EPA data")
+    for row in query_job:
+        print("EPA Data Retrieved")
 
-    hour = int(query_job[9])
-    updated_hour = hour + 1
-    query_job[9] = updated_hour
 
-    return query_job
+    time = row.next_dt.strftime('%Y-%m-%dT%H:%M')
+    return time
 
 
 
@@ -95,19 +111,30 @@ def convert_to_csv(input_json):
     # and https://stackoverflow.com/questions/9157314/how-do-i-write-data-into-csv-format-as-string-not-file
     si = StringIO()
     keylist = []
-    for key in input_json[0]:
-        keylist.append(key)
+    #print(input_json)
+    for key in input_json[0]: #I think trying to index into json here doesn't grab
+        keylist.append(key) #the first dict. It, instead, looks at a key within the first dict
         f = csv.writer(si)
 
-    f.writerow(keylist)
 
+    f.writerow(keylist)
+    #print(keylist)
     for record in input_json:
+
         currentrecord = []
+
         for key in keylist:
             currentrecord.append(record[key])
         f.writerow(currentrecord)
 
+
     return si.getvalue()
+    #
+    # pdObj = pd.read_json(input_json, orient='split')
+    # csvData = pdObj.to_csv(index=False)
+    # return csvData
+
+
 
 def get_next_version():
     url = "{}/datasets/{}/versions".format( api_base_path, dataset_identifier )
