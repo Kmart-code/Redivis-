@@ -3,7 +3,13 @@ import csv
 import os
 import requests
 import json
+<<<<<<< Updated upstream
 import time
+=======
+import pandas
+from datetime import datetime, timedelta
+from time import gmtime, strftime, sleep
+>>>>>>> Stashed changes
 from io import StringIO
 
 # When calling this script, provide the API Token as an environment variables
@@ -13,9 +19,15 @@ from io import StringIO
 access_token = os.environ["REDIVIS_API_TOKEN"]
 
 # See https://apidocs.redivis.com/referencing-resources
+<<<<<<< Updated upstream
 user_name = "redivis"
 dataset_name = "epa_test"
 table_name = "pm2_5"
+=======
+user_name = "kevin"
+dataset_name = "practice"
+table_name = "Practice01"
+>>>>>>> Stashed changes
 
 dataset_identifier = "{}.{}".format(user_name, dataset_name)
 table_identifier = "{}.{}:next.{}".format(user_name, dataset_name, table_name)
@@ -24,11 +36,26 @@ filename = "test.csv"
 file_path = os.path.join("./", filename)
 
 
+<<<<<<< Updated upstream
 def main():
     # TODO: get last_updated timestamp, fetch all data since
     print("Fetching EPA data")
 
     epa_data = pull_from_epa_api(start_time="2020-07-06T00", end_time = "2020-07-07T00")
+=======
+
+def main():
+
+    start_time = get_start_time()
+
+    end_time = start_time + timedelta(days=1)
+
+    useful_start_time = datetime.strftime(start_time,"%Y-%m-%dT%H:%M")
+
+    useful_end_time = datetime.strftime(end_time, "%Y-%m-%dT%H:%M")
+
+    epa_data = pull_from_epa_api(start_time=useful_start_time, end_time=useful_end_time)
+>>>>>>> Stashed changes
 
     print("Creating next version if needed...")
 
@@ -44,7 +71,7 @@ def main():
 
     # Wait for upload to finish importing
     while True:
-        time.sleep(2)
+        sleep(2)
         upload = get_upload(upload['uri'])
         if upload['status'] == 'failed':
             sys.exit( "Issue with importing uploaded file, abandoning process...: \n\t{}".format( upload['errorMessage'] ) )
@@ -57,6 +84,28 @@ def main():
 
     release_dataset()
 
+<<<<<<< Updated upstream
+=======
+def get_start_time():
+
+    client = bigquery.Client()
+
+    start_time = """SELECT DATETIME_ADD(MAX(PARSE_DATETIME('%Y-%m-%dT%H:%M', UTC)), INTERVAL 1 hour) as next_dt 
+                    FROM redivis.epa_test.pm2_5:1"""
+
+    query_job = client.query(start_time)
+
+
+    for row in query_job:
+        print("Working...")
+
+    time = row.next_dt.strftime('%Y-%m-%dT%H:%M')
+    formatted_time = pandas.to_datetime(time)
+    return formatted_time
+
+
+
+>>>>>>> Stashed changes
 def pull_from_epa_api(start_time, end_time):
     # See https://docs.airnowapi.org/Data/query
     # BBox is for California
@@ -71,15 +120,24 @@ def pull_from_epa_api(start_time, end_time):
 
 
 def convert_to_csv(input_json):
-    # See https://www.idkrtm.com/converting-json-to-csv-and-back-again-using-python/
-    # and https://stackoverflow.com/questions/9157314/how-do-i-write-data-into-csv-format-as-string-not-file
+
     si = StringIO()
     keylist = []
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
     for key in input_json[0]:
         keylist.append(key)
         f = csv.writer(si)
 
     f.writerow(keylist)
+<<<<<<< Updated upstream
+=======
+
+
+    for record in input_json:
+>>>>>>> Stashed changes
 
     for record in input_json:
         currentrecord = []
@@ -88,6 +146,12 @@ def convert_to_csv(input_json):
         f.writerow(currentrecord)
 
     return si.getvalue()
+<<<<<<< Updated upstream
+=======
+
+
+
+>>>>>>> Stashed changes
 
 def get_next_version():
     url = "{}/datasets/{}/versions".format( api_base_path, dataset_identifier )
