@@ -13,9 +13,9 @@ from io import StringIO
 access_token = os.environ["REDIVIS_API_TOKEN"]
 
 # See https://apidocs.redivis.com/referencing-resources
-user_name = "redivis"
-dataset_name = "epa_test"
-table_name = "pm2_5"
+user_name = "[username_or_organization ]"
+dataset_name = "[dataset_name]"
+table_name = "[table_name]"
 
 dataset_identifier = "{}.{}".format(user_name, dataset_name)
 table_identifier = "{}.{}:next.{}".format(user_name, dataset_name, table_name)
